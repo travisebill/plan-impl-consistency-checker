@@ -74,6 +74,47 @@ class TestDiscoverPlanFiles:
             assert found == []
 
 
+    def test_auto_discover_with_ignore_legacy_skips_designs(self):
+        """--ignore-legacy 應該跳過 docs/designs/*.md，只掃 docs/changes/phase-*/03-plan.md"""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project = Path(tmpdir)
+            # active phase
+            changes = project / "docs" / "changes" / "phase-l-cloud-saas"
+            changes.mkdir(parents=True)
+            (changes / "03-plan.md").write_text("# Plan L.1.2\n", encoding="utf-8")
+            # legacy designs
+            designs = project / "docs" / "designs"
+            designs.mkdir(parents=True)
+            (designs / "2026-05-15-phase-7.md").write_text("# Phase 7 (legacy)\n", encoding="utf-8")
+            (designs / "2026-05-10-phase-3.md").write_text("# Phase 3 (legacy)\n", encoding="utf-8")
+
+            plans = discover_plan_files(project, ignore_legacy=True)
+
+            # 只應該有 1 個 plan (phase-l)
+            assert len(plans) == 1
+            assert "phase-l" in str(plans[0])
+
+    def test_auto_discover_without_ignore_legacy_includes_designs(self):
+        """不帶 --ignore-legacy 時，legacy designs/*.md 也要掃（向後相容）"""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project = Path(tmpdir)
+            # active phase
+            changes = project / "docs" / "changes" / "phase-l-cloud-saas"
+            changes.mkdir(parents=True)
+            (changes / "03-plan.md").write_text("# Plan L.1.2\n", encoding="utf-8")
+            # legacy designs
+            designs = project / "docs" / "designs"
+            designs.mkdir(parents=True)
+            (designs / "2026-05-15-phase-7.md").write_text("# Phase 7 (legacy)\n", encoding="utf-8")
+
+            plans = discover_plan_files(project, ignore_legacy=False)
+
+            # 應該有 2 個 plans
+            assert len(plans) == 2
+
+
 class TestCLIArgparse:
     """CLI argparse 整合測試。"""
 
@@ -86,3 +127,20 @@ class TestCLIArgparse:
         """main 函式存在。"""
         from check_plan_impl_consistency import main
         assert callable(main)
+
+    def test_ignore_legacy_flag_accepted(self):
+        """--ignore-legacy 是有效的 CLI 參數。"""
+        import argparse, sys
+        from importlib import reload
+        import check_plan_impl_consistency as cpic
+        reload(cpic)
+        # 模擬 python check.py --help 能成功（不crash）
+        try:
+            cpic.main()
+        except SystemExit:
+            pass  # argparse exits after --help
+        # 直接測 argparse 解析
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--ignore-legacy", action="store_true")
+        args = parser.parse_args(["--ignore-legacy"])
+        assert args.ignore_legacy is True

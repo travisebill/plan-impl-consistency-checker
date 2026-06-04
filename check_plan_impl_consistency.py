@@ -415,16 +415,25 @@ def scan_directory(
     return files
 
 
-def discover_plan_files(project_root: Path) -> list[Path]:
-    """自動發現 plan 文件。"""
+def discover_plan_files(project_root: Path, ignore_legacy: bool = False) -> list[Path]:
+    """自動發現 plan 文件。
+
+    Args:
+        project_root: 專案根目錄
+        ignore_legacy: 若 True,只掃 docs/changes/phase-*/ (新格式=active phase),
+                       跳過 docs/designs/*.md (legacy Phase A~K)
+    """
     plans: list[Path] = []
     changes = project_root / "docs" / "changes"
     if changes.exists():
         plans.extend(changes.glob("**/03-plan.md"))
         plans.extend(changes.glob("**/03-design.md"))
-    designs = project_root / "docs" / "designs"
-    if designs.exists():
-        plans.extend(designs.glob("*.md"))
+
+    if not ignore_legacy:
+        designs = project_root / "docs" / "designs"
+        if designs.exists():
+            plans.extend(designs.glob("*.md"))
+
     return plans
 
 
@@ -542,6 +551,11 @@ def main() -> None:
         help="自動發現 plan 文件",
     )
     parser.add_argument(
+        "--ignore-legacy",
+        action="store_true",
+        help="Auto-discover 時跳過 docs/designs/*.md (legacy Phase A~K)，只掃 docs/changes/phase-*/ (active phase)",
+    )
+    parser.add_argument(
         "--category",
         type=str,
         choices=["all", "r2_key", "env_var", "api_path", "func_sig", "error_code"],
@@ -566,7 +580,7 @@ def main() -> None:
             sys.exit(1)
     elif args.auto_discover:
         cwd = Path.cwd()
-        plan_paths = discover_plan_files(cwd)
+        plan_paths = discover_plan_files(cwd, ignore_legacy=args.ignore_legacy)
         if not plan_paths:
             print(f"Warning: no plan files found in {cwd}/docs/", file=sys.stderr)
     else:
