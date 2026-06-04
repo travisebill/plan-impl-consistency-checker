@@ -252,7 +252,10 @@ class ApiPathExtractor:
 
 
 class FunctionSigExtractor:
-    """從 plan 或 code 抽出函式簽名字串。"""
+    """從 plan 或 code 抽出函式簽名字串。
+
+    只比對函式名（不含參數），避免因型別差異（如 Path vs str）產生誤報。
+    """
 
     PATTERN = re.compile(r'def\s+(\w+)\s*\(([^)]*)\)')
 
@@ -267,12 +270,12 @@ class FunctionSigExtractor:
 
             for m in self.PATTERN.finditer(line):
                 func_name = m.group(1)
-                params = m.group(2).strip()
-                sig = f"def {func_name}({params})"
-                if sig not in seen:
-                    seen.add(sig)
+                # 只存函式名，不含參數
+                key = f"def {func_name}"
+                if key not in seen:
+                    seen.add(key)
                     results.append(KeywordMatch(
-                        key=sig, line_no=line_no, source=source, context=stripped,
+                        key=key, line_no=line_no, source=source, context=stripped,
                     ))
         return results
 
