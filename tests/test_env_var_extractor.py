@@ -52,3 +52,37 @@ class TestEnvVarExtractorCode:
         results = extractor.extract(code_text, source="code")
         keys = [r.key for r in results]
         assert "DATABASE_URL" in keys
+
+
+class TestEnvVarExtractorBlindSpots:
+    """盲點修復測試：EnvVarExtractor 排除複合詞"""
+
+    def test_env_var_rejects_compound_words_like_r2_supabase(self):
+        """R2/Supabase、Read/Write 中的 R2、WRITE 不應被當 env var"""
+        extractor = EnvVarExtractor()
+        text = "Storage options: R2/Supabase, Read/Write"
+        results = extractor.extract(text, source="plan")
+        keys = [r.key for r in results]
+        assert "R2" not in keys, f"R2 不應被識別為 env var，實際: {keys}"
+        assert "WRITE" not in keys, f"WRITE 不應被識別為 env var，實際: {keys}"
+        assert "READ" not in keys, f"READ 不應被識別為 env var，實際: {keys}"
+
+    def test_env_var_rejects_single_word_all_caps(self):
+        """READ、WRITE、DELETE 單獨出現也不算 env var（需有底線）"""
+        extractor = EnvVarExtractor()
+        text = "Operations: READ, WRITE, DELETE"
+        results = extractor.extract(text, source="plan")
+        keys = [r.key for r in results]
+        assert "READ" not in keys, f"READ 不應被識別為 env var，實際: {keys}"
+        assert "WRITE" not in keys, f"WRITE 不應被識別為 env var，實際: {keys}"
+        assert "DELETE" not in keys, f"DELETE 不應被識別為 env var，實際: {keys}"
+
+    def test_env_var_accepts_valid_r2_vars(self):
+        """R2_ACCOUNT_ID、R2_ACCESS_KEY 等有效 env var 仍要接受"""
+        extractor = EnvVarExtractor()
+        text = "Need: R2_ACCOUNT_ID, R2_ACCESS_KEY, R2_BUCKET_NAME"
+        results = extractor.extract(text, source="plan")
+        keys = [r.key for r in results]
+        assert "R2_ACCOUNT_ID" in keys, f"R2_ACCOUNT_ID 應被接受，實際: {keys}"
+        assert "R2_ACCESS_KEY" in keys, f"R2_ACCESS_KEY 應被接受，實際: {keys}"
+        assert "R2_BUCKET_NAME" in keys, f"R2_BUCKET_NAME 應被接受，實際: {keys}"

@@ -161,12 +161,19 @@ class EnvVarExtractor:
         "RAISE", "NOTICE", "WARNING", "COMPLETE", "BEFORE", "UNTIL",
         "CONCURRENTLY", "LOCK_EX", "LOCK_NB", "MAX_RETRIES",
         "INTERNAL_ERROR", "LOCAL_CACHE", "R2_CACHE_DIR",
+        # SQL 操作關鍵字（常被誤當 env var）
+        "READ", "WRITE", "TRUNCATE", "MERGE", "UPSERT",
+        "GET", "POST", "PUT", "PATCH", "OPTIONS", "HEADERS",
+        "R2", "S3", "AWS", "GCP", "AZURE", "SUPABASE",
     }
 
     def _is_env_var(self, candidate: str) -> bool:
         if candidate in self.NON_ENV:
             return False
         if len(candidate) < 3:
+            return False
+        # 必須包含底線（純 ALL_CAPS 單字如 READ、WRITE 不算 env var）
+        if "_" not in candidate and len(candidate) <= 5:
             return False
         return True
 
