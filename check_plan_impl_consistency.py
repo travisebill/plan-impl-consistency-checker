@@ -521,7 +521,7 @@ def main() -> None:
     parser.add_argument(
         "--scope",
         type=str,
-        default="src/,scripts/",
+        default="src/scraper/,src/backend/,scripts/",
         help="程式碼掃描範圍，逗號分隔（默认: src/,scripts/）",
     )
     parser.add_argument(
