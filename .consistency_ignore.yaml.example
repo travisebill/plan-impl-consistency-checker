@@ -1,0 +1,16 @@
+# Plan vs Implementation 一致性檢查 — 豁免清單範例
+#
+# 將此檔複製到專案根目錄並改名為 .consistency_ignore.yaml
+# 每個豁免需要包含:
+#   - key:  要豁免的關鍵字串
+#   - reason: 為什麼豁免(要寫清楚,review 時要審)
+#   - expires: 過期條件(Phase 完成日期 / commit hash / 永遠)
+
+phase_l:
+  - key: "gamelogs/cpbl_full_{date}.json"
+    reason: "Rebuild snapshot 與增量爬蟲 jsonl.gz 並存於 R2,plan 09-plan-revision-sora.md 已確認"
+    expires: "phase-l-completion"
+
+  - key: "R2_ACCOUNT_ID"
+    reason: "env var,plan L.1.1 已說明,純粹是 reminder 而非未實作"
+    expires: "never"
