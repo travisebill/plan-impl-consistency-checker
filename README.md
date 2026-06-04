@@ -28,7 +28,31 @@ python check_plan_impl_consistency.py \
   --scope src/,scripts/
 ```
 
-這會自動掃描 `docs/changes/**/03-plan.md` 和 `docs/designs/*.md`。
+這會自動掃描：
+- `docs/changes/**/03-plan.md`（新格式，所有 phase）
+- `docs/changes/archive/*/03-plan.md`（已完成的存檔 phases）
+- `docs/designs/*.md`（legacy Phase A~K 格式）
+
+若只想檢查**目前 active phase**（跳過 legacy docs + archive），加 `--ignore-legacy`：
+
+```bash
+python check_plan_impl_consistency.py \
+  --auto-discover \
+  --ignore-legacy \
+  --scope src/,scripts/
+```
+
+`--ignore-legacy` 掃描範圍：
+- ✅ `docs/changes/phase-*/03-plan.md`（active phases）
+- ❌ `docs/designs/*.md`（legacy Phase A~K，超過 6 個月技術債）
+- ❌ `docs/changes/archive/*/03-plan.md`（已完成的存檔 phases）
+
+**為什麼需要 `--ignore-legacy`**：
+
+ legacy `docs/designs/` 和 `docs/changes/archive/` 累積了 Phase A~K 的計劃，
+與當前程式碼已嚴重脫節（6 個月未更新）。`--ignore-legacy` 讓
+auto-discover 只專注於當前 active phase，pre-commit hook 不會被
+幾百個 legacy 警告打斷開發節奏。
 
 ### 只檢查特定類別
 
@@ -42,10 +66,15 @@ python check_plan_impl_consistency.py --plan ... --category env_var
 
 ### 使用豁免清單
 
+建議搭配 `--ignore-legacy` 使用，避免 legacy plan 產生的大量警告需要
+一個龐大的豁免清單：
+
 ```bash
 python check_plan_impl_consistency.py \
-  --plan ... \
-  --ignore-file .consistency_ignore.yaml
+  --auto-discover \
+  --ignore-legacy \
+  --ignore-file .consistency_ignore.yaml \
+  --scope src/,scripts/
 ```
 
 ## 支援的關鍵字類別

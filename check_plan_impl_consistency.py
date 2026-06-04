@@ -421,13 +421,20 @@ def discover_plan_files(project_root: Path, ignore_legacy: bool = False) -> list
     Args:
         project_root: 專案根目錄
         ignore_legacy: 若 True,只掃 docs/changes/phase-*/ (新格式=active phase),
-                       跳過 docs/designs/*.md (legacy Phase A~K)
+                       跳過 docs/designs/*.md (legacy Phase A~K) 和
+                       docs/changes/archive/ (已完成的存檔 phases)
     """
     plans: list[Path] = []
     changes = project_root / "docs" / "changes"
     if changes.exists():
-        plans.extend(changes.glob("**/03-plan.md"))
-        plans.extend(changes.glob("**/03-design.md"))
+        all_plans: list[Path] = []
+        all_plans.extend(changes.glob("**/03-plan.md"))
+        all_plans.extend(changes.glob("**/03-design.md"))
+
+        if ignore_legacy:
+            plans.extend(p for p in all_plans if "/archive/" not in str(p))
+        else:
+            plans.extend(all_plans)
 
     if not ignore_legacy:
         designs = project_root / "docs" / "designs"
@@ -455,7 +462,7 @@ def install_hook(project_path: Path, skill_dir: Path) -> None:
         'PROJECT_ROOT="$(git rev-parse --show-toplevel)"\n'
         '\necho "Plan vs Implementation consistency check..."\n'
         'cd "$PROJECT_ROOT" || exit 1\n'
-        'python3 "$SKILL_DIR/check_plan_impl_consistency.py" --auto-discover --scope src/,scripts/ --output-format text\n'
+        'python3 "$SKILL_DIR/check_plan_impl_consistency.py" --auto-discover --ignore-legacy --scope src/,scripts/ --output-format text\n'
         'EXIT_CODE=$?\n'
         'if [ $EXIT_CODE -ne 0 ]; then\n'
         '    echo "Fix issues before committing. Use --ignore-file to add exemptions."\n'
