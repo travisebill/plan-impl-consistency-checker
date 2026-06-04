@@ -58,6 +58,15 @@ class R2KeyExtractor:
     - Code:     "gamelogs/{date}.jsonl.gz"
     """
 
+    # R2 key 白名單前綴：只有這些目錄/檔案才算 R2 key
+    R2_PREFIXES = (
+        "gamelogs/", "pbp/", "models/", "odds/",
+        "advanced/", "splits/", "weather/",
+    )
+    R2_KNOWN_FILES = (
+        "park_factors.json", "latest.json",
+    )
+
     # Plan: R2 key 通常沒有反引號，直接匹配目錄/副檔名格式
     PLAN_PATTERN = re.compile(r'([a-zA-Z0-9_/{}.-]+/[a-zA-Z0-9_{}. -]+(?:/[a-zA-Z0-9_{}. -]+)*(?:\.[a-z]+(?:\\.gz)?)?)')
     PLAN_BACKTICK_PATTERN = re.compile(r'`([a-zA-Z0-9_/{}.-]+)`')
@@ -80,7 +89,11 @@ class R2KeyExtractor:
             return False
         if "://" in candidate:
             return False
-        return True
+        # 白名單前綴檢查：必須以 gamelogs/, pbp/, models/ 等開頭
+        prefix_ok = any(candidate.startswith(p) for p in self.R2_PREFIXES)
+        # 或是已知的 R2 檔案（如 park_factors.json）
+        filename_ok = candidate in self.R2_KNOWN_FILES
+        return prefix_ok or filename_ok
 
     def extract(self, text: str, source: Literal["plan", "code"] = "plan") -> list[KeywordMatch]:
         results: list[KeywordMatch] = []
