@@ -1,57 +1,18 @@
 # Plan vs Implementation 一致性檢查工具
 
-> 自動比對 plan 文件與程式碼的關鍵字串是否一致,提早抓出「plan 寫一套,code 做一套」的問題。
-
-[![GitHub](https://img.shields.io/badge/GitHub-travisebill%2Fplan--impl--consistency--checker-blue)](https://github.com/travisebill/plan-impl-consistency-checker)
-[![Status](https://img.shields.io/badge/status-skeleton-yellow)]()
-
-## 為什麼需要這個工具?
-
-在 AI 輔助開發流程中,**plan 文件**(PM 寫的設計/實作計畫)和**程式碼**(工程師實作的結果)之間常常會出現落差:
-
-- Plan 寫 `gamelogs/{date}.jsonl.gz`,code 寫 `gamelogs/cpbl_full_{date}.json`
-- Plan 寫 `def upload_file(path, key)`,code 寫 `def upload_file(local_path, remote_key, ...)`
-- Plan 寫 `R2_ACCOUNT_ID`,code 卻讀 `R2_BUCKET_NAME`
-
-這些落差**在 review 階段很難全部抓到**,因為 reviewer 看到的是「程式碼看起來合理」+「plan 看起來完整」,**卻沒有人把兩邊字串一一比對**。這個工具就是自動做這件事。
-
-## 五大檢查類別
-
-| # | 類型 | Plan 範例 | Code 範例 |
-|---|------|----------|----------|
-| 1 | **R2/S3 keys** | `gamelogs/{season}/{date}.jsonl.gz` | `f"gamelogs/cpbl_full_{date_str}.json"` |
-| 2 | **Env var names** | `R2_ACCOUNT_ID` | `os.environ["R2_ACCOUNT_ID"]` |
-| 3 | **API paths** | `/api/v1/health` | `"/api/v1/health"` |
-| 4 | **Function signatures** | `def upload_file(path: Path, key: str)` | `def upload_file(local_path, remote_key, ...)` |
-| 5 | **Error codes** | `R2_UPLOAD_FAILED` | raise exception / return False |
+> 自動比對 plan 文件與程式碼的關鍵字串是否一致，提早抓出「plan 寫一套，code 做一套」的問題。
 
 ## 安裝
 
-### 方式 1: 直接 clone(推薦)
+在你想使用這個工具的專案根目錄執行：
 
 ```bash
-git clone https://github.com/travisebill/plan-impl-consistency-checker.git \
-  ~/.openclaw/workspace/skills/plan-impl-consistency-checker
-```
-
-### 方式 2: 安裝 pre-commit hook 到現有專案
-
-```bash
-# 在你的專案根目錄執行
 python ~/.openclaw/workspace/skills/plan-impl-consistency-checker/install.py
 ```
 
-安裝後,**每次 `git commit` 都會自動跑一致性檢查**,0 warnings 才能 commit。
+這會在專案的 `.git/hooks/pre-commit` 寫入鉤子。以後每次 `git commit` 都會自動檢查。
 
-需要跳過檢查時(罕見):
-
-```bash
-git commit --no-verify -m "emergency hotfix"
-```
-
-## 使用方式
-
-### 手動掃描單一 plan
+## 手動使用
 
 ```bash
 python ~/.openclaw/workspace/skills/plan-impl-consistency-checker/check_plan_impl_consistency.py \
@@ -59,90 +20,115 @@ python ~/.openclaw/workspace/skills/plan-impl-consistency-checker/check_plan_imp
   --scope src/scraper/,scripts/
 ```
 
-### 自動發現所有 plan(新舊 Phase 都支援)
+### 自動發現 plan 文件
 
 ```bash
-python ~/.openclaw/workspace/skills/plan-impl-consistency-checker/check_plan_impl_consistency.py \
+python check_plan_impl_consistency.py \
   --auto-discover \
   --scope src/,scripts/
 ```
 
-工具會自動掃描:
-- `docs/changes/phase-*/03-plan.md`(Phase L+ 新格式)
-- `docs/designs/2026-*-phase-*.md`(Phase A-K 舊格式)
-- `docs/designs/phase-*.md`(混合格式)
+這會自動掃描 `docs/changes/**/03-plan.md` 和 `docs/designs/*.md`。
 
-### 輸出格式
+### 只檢查特定類別
 
 ```bash
-# 人讀(預設)
---output-format text
+# 只檢查 R2 key
+python check_plan_impl_consistency.py --plan ... --category r2_key
 
-# 機器讀(CI 用)
---output-format json
+# 只檢查環境變數
+python check_plan_impl_consistency.py --plan ... --category env_var
 ```
+
+### 使用豁免清單
+
+```bash
+python check_plan_impl_consistency.py \
+  --plan ... \
+  --ignore-file .consistency_ignore.yaml
+```
+
+## 支援的關鍵字類別
+
+| 類別 | 說明 | Plan 範例 | Code 範例 |
+|------|------|----------|----------|
+| `r2_key` | R2 物件 key | `gamelogs/{date}.jsonl.gz` | `f"gamelogs/cpbl_full_{date}.json"` |
+| `env_var` | 環境變數名稱 | `R2_ACCOUNT_ID` | `os.environ["R2_ACCOUNT_ID"]` |
+| `api_path` | API 路徑 | `/api/v1/health` | `"/api/v1/health"` |
+| `func_sig` | 函式簽名 | `def upload_file(path, key)` | `def upload_file(local_path, remote_key)` |
+| `error_code` | 錯誤碼常量 | `R2_UPLOAD_FAILED` | `NETWORK_TIMEOUT_ERROR` |
 
 ## 豁免管理
 
-某些落差是**刻意的**(如 plan 同時描述兩種 R2 物件佈局),這時可以用豁免清單標記。
-
-在專案根目錄放 `.consistency_ignore.yaml`:
+在專案根目錄建立 `.consistency_ignore.yaml`：
 
 ```yaml
 phase_l:
   - key: "gamelogs/cpbl_full_{date}.json"
-    reason: "Rebuild snapshot 與增量爬蟲 jsonl.gz 並存於 R2,plan 09-plan-revision-sora.md 已確認"
+    reason: "Rebuild snapshot 與增量爬蟲 jsonl.gz 並存，plan 已確認"
     expires: "phase-l-completion"
 
   - key: "R2_ACCOUNT_ID"
-    reason: "env var,plan L.1.1 已說明,純粹是 reminder 而非未實作"
+    reason: "env var,plan L.1.1 已說明"
     expires: "never"
 ```
 
-**重要**: 每個豁免都必須有 `reason` 和 `expires`,否則審查時無法判斷是否合理。
+`expires` 可用：
+- `"never"` — 永遠豁免
+- `"phase-l-completion"` — Phase L 完成後過期（目前僅 warn，不自動刪除）
+- 日期如 `"2026-09-01"` — 到期後過期
 
-## 開發流程整合
+## 輸出格式
 
-### 觸發時機
+### 文字報告（預設）
 
-- 🔴 **Ruka 提 PR 前**: 必跑,0 warnings 才能 push
-- 🔴 **Ryo code review 開始**: 必跑,確認 Ruka 跑過
-- 🟡 **Mame QA 收尾(Phase 完成)**: 跑全套 plan files
+```
+⚠️  共 2 個一致性警告：
 
-### 失敗處理
-
-- **1-2 個 warnings + 理由明確** → 加豁免後通過
-- **3+ 個 warnings** → 視為 plan 與 impl 不一致,需修正 plan 或 code
-- **0 warnings** → 完美,commit 通過
-
-## 跨專案適用
-
-這個 skill 設計為**完全獨立**於任何特定專案:
-
-```bash
-# 任何專案的根目錄都能用
-cd ~/my-new-project
-python ~/.openclaw/workspace/skills/plan-impl-consistency-checker/check_plan_impl_consistency.py \
-  --plan docs/design.md \
-  --scope src/
+  [r2_key] 📄 Plan 提到「gamelogs/{date}.jsonl.gz」但 Code 中未找到
+  [r2_key] 💻 Code 使用「gamelogs/cpbl_full_{date}.json」但 Plan 未記載
 ```
 
-只要專案有 `docs/*.md` + `src/*.py`,就能跑。
+### JSON 報告
 
-## 開發狀態
+```bash
+python check_plan_impl_consistency.py --plan ... --output-format json
+```
 
-🚧 **目前狀態: Skeleton 階段**
+```json
+{
+  "total_warnings": 2,
+  "warnings": [
+    {
+      "category": "r2_key",
+      "plan_key": "gamelogs/{date}.jsonl.gz",
+      "code_key": "gamelogs/cpbl_full_{date}.json",
+      "message": "📄 Plan 提到..."
+    }
+  ]
+}
+```
 
-- [x] 初始結構(.gitignore、SKILL.md、豁免清單範例)
-- [x] GitHub repo 建立
-- [ ] 5 類 extractor(R2 keys、env vars、API paths、function signatures、error codes)
-- [ ] ConsistencyChecker + 豁免機制
-- [ ] CLI + 自動發現
-- [ ] pre-commit hook 安裝腳本
-- [ ] 跨專案驗證(CPBL Predictor + 全新專案)
+## 測試
 
-詳見 [TDD 開發進度](https://github.com/travisebill/plan-impl-consistency-checker/commits/main)。
+```bash
+cd ~/.openclaw/workspace/skills/plan-impl-consistency-checker
+python3 -m pytest tests/ -v
+```
 
-## 授權
+## 架構
 
-MIT
+```
+check_plan_impl_consistency.py
+├── R2KeyExtractor        # 抽 R2 object key
+├── EnvVarExtractor      # 抽環境變數名稱
+├── ApiPathExtractor     # 抽 API 路徑
+├── FunctionSigExtractor # 抽函式簽名
+├── ErrorCodeExtractor  # 抽錯誤碼常量
+├── ConsistencyChecker   # 比對 + 豁免 + 報告
+├── scan_directory()     # 掃描程式碼目錄
+├── discover_plan_files() # 自動發現 plan 文件
+└── main()              # CLI 進入點
+
+bin/install.py          # Pre-commit hook 安裝腳本
+```
